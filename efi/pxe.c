@@ -35,8 +35,52 @@ int reset_pxe(void)
 #define DNS_MAX_SERVERS 4		/* Max no of DNS servers */
 uint32_t dns_server[DNS_MAX_SERVERS] = {0, };
 
+
+/*
+ * parse the ip_str and return the ip address with *res.
+ * return true if the whole string was consumed and the result
+ * was valid.
+ *
+ */
+static bool parse_quad(const char *ip_str, uint32_t *res)
+{
+    const char *p = ip_str;
+    uint8_t part = 0;
+    uint32_t ip = 0;
+    int i;
+
+    for (i = 0; i < 4; i++) {
+        while (is_digit(*p)) {
+            part = part * 10 + *p - '0';
+            p++;
+        }
+        if (i != 3 && *p != '.')
+            return false;
+
+        ip = (ip << 8) | part;
+        part = 0;
+        p++;
+    }
+    p--;
+
+    *res = htonl(ip);
+    return *p == '\0';
+}
+
+
+/*
+ * Similar implementation as core/fs/pxe/dnsresolv.c
+ *
+ * Allow ipv4 host names to be used. Do not support
+ * DNS names or ipv6.
+ *
+ */
+
 __export uint32_t pxe_dns(const char *name)
 {
+
+    uint32_t ip;
+
     /*
      * Return failure on an empty input... this can happen during
      * some types of URL parsing, and this is the easiest place to
@@ -44,6 +88,11 @@ __export uint32_t pxe_dns(const char *name)
      */
     if (!name || !*name)
 	return 0;
+
+    /* If it is a valid dot quad, just return that value */
+    if (parse_quad(name, &ip)){
+	return ip;
+    }
 
     return 0;
 }
